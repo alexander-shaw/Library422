@@ -26,8 +26,11 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -256,6 +259,84 @@ class RentalServiceTest {
         verifyNoMoreInteractions(bookRepository, userRepository, paymentService);
     }
 
+    @Test
+    @DisplayName("Returning a book with an unknown user throws UserNotFoundException")
+    void returnBookWithUnknownUserThrowsUserNotFoundException() {
+        int unknownUserId = 999;
+        when(userRepository.findUserById(unknownUserId)).thenReturn(null);
+
+        UserNotFoundException exception = assertThrows(
+                UserNotFoundException.class,
+                () -> rentalService.returnBook(unknownUserId, BOOK_TITLE)
+        );
+
+        assertEquals("User with ID " + unknownUserId + " not found", exception.getMessage());
+        verify(userRepository).findUserById(unknownUserId);
+        verifyNoInteractions(bookRepository, paymentService);
+        verify(dateProvider, never()).today();
+        verifyNoReturnPersistence();
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("returnBookNotRentedByUserCases")
+    @DisplayName("Returning a book not rented by the user throws BookNotFoundException")
+    void returnBookWhenNotRentedByUserThrowsBookNotFoundException(String scenario, Book book) {
+        User user = user(MembershipType.STUDENT);
+        when(userRepository.findUserById(USER_ID)).thenReturn(user);
+        when(bookRepository.findBookByTitle(BOOK_TITLE)).thenReturn(book);
+
+        BookNotFoundException exception = assertThrows(
+                BookNotFoundException.class,
+                () -> rentalService.returnBook(USER_ID, BOOK_TITLE)
+        );
+
+        assertEquals(
+                "Book " + BOOK_TITLE + " was not rented by user " + user.name(),
+                exception.getMessage());
+        verify(userRepository).findUserById(USER_ID);
+        verify(bookRepository).findBookByTitle(BOOK_TITLE);
+        verify(dateProvider, never()).today();
+        verify(paymentService, never()).chargeLateFee(any(), anyInt());
+        verifyNoReturnPersistence();
+    }
+
+    @ParameterizedTest(name = "due {0} days from today yields zero fee")
+    @MethodSource("onTimeReturnCases")
+    @DisplayName("Returning a book on or before the due date returns zero fee and does not charge")
+    void returnBookOnTimeReturnsZeroFeeAndDoesNotCharge(int daysUntilDue) {
+        User user = user(MembershipType.STUDENT);
+        LocalDate dueDate = TODAY.plusDays(daysUntilDue);
+        Book rentedBook = rentedBook(user, BookCategory.REGULAR, dueDate);
+        when(userRepository.findUserById(USER_ID)).thenReturn(user);
+        when(bookRepository.findBookByTitle(BOOK_TITLE)).thenReturn(rentedBook);
+
+        int lateFee = rentalService.returnBook(USER_ID, BOOK_TITLE);
+
+        assertEquals(0, lateFee);
+        verifySuccessfulReturn(user, false, 0);
+        verify(dateProvider).today();
+        verify(paymentService, never()).chargeLateFee(any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("Returning a book late charges a positive late fee and updates the repository")
+    void returnBookLateChargesPositiveLateFeeAndUpdatesRepository() {
+        User user = user(MembershipType.COMMUNITY);
+        LocalDate dueDate = TODAY.minusDays(3);
+        Book rentedBook = rentedBook(user, BookCategory.REGULAR, dueDate);
+        when(userRepository.findUserById(USER_ID)).thenReturn(user);
+        when(bookRepository.findBookByTitle(BOOK_TITLE)).thenReturn(rentedBook);
+
+        int lateFee = rentalService.returnBook(USER_ID, BOOK_TITLE);
+
+        // COMMUNITY regular: 3 days late, 0 grace, 50 cents/day → 150
+        assertEquals(150, lateFee);
+        verifySuccessfulReturn(user, true, 150);
+        verify(dateProvider).today();
+        verify(paymentService).chargeLateFee(user, 150);
+        verify(paymentService, never()).getOutstandingBalance(any());
+    }
+
     static Stream<Arguments> successfulRentBookCases() {
         return Stream.of(
                 Arguments.of(MembershipType.STUDENT, BookCategory.REGULAR, 21),
@@ -283,12 +364,35 @@ class RentalServiceTest {
         );
     }
 
+    static Stream<Arguments> returnBookNotRentedByUserCases() {
+        User otherUser = new User("Bob", 2, MembershipType.FACULTY);
+        return Stream.of(
+                Arguments.of("unknown book", null),
+                Arguments.of("book not currently rented", new Book(BOOK_TITLE, BOOK_AUTHOR, BookCategory.REGULAR)),
+                Arguments.of(
+                        "book rented by another user",
+                        new Book(BOOK_TITLE, BOOK_AUTHOR, BookCategory.REGULAR)
+                                .rentTo(otherUser, TODAY.plusDays(7)))
+        );
+    }
+
+    static Stream<Arguments> onTimeReturnCases() {
+        return Stream.of(
+                Arguments.of(5),  // before due date
+                Arguments.of(0)   // exactly on due date
+        );
+    }
+
     private User user(MembershipType membership) {
         return new User("Alice", USER_ID, membership);
     }
 
     private Book availableBook(BookCategory category) {
         return new Book(BOOK_TITLE, BOOK_AUTHOR, category);
+    }
+
+    private Book rentedBook(User renter, BookCategory category, LocalDate dueDate) {
+        return new Book(BOOK_TITLE, BOOK_AUTHOR, category).rentTo(renter, dueDate);
     }
 
     private void stubEligibleUserAndBook(User user, Book book) {
@@ -300,5 +404,27 @@ class RentalServiceTest {
     private void verifyNoRentalPersistence() {
         verify(bookRepository, never()).updateBook(any());
         verify(bookRepository, never()).addBookToUser(any(), any());
+    }
+
+    private void verifyNoReturnPersistence() {
+        verify(bookRepository, never()).updateBook(any());
+        verify(bookRepository, never()).removeBookFromUser(any(), any());
+        verify(paymentService, never()).chargeLateFee(any(), anyInt());
+    }
+
+    private void verifySuccessfulReturn(User user, boolean expectCharge, int expectedFee) {
+        ArgumentCaptor<Book> bookCaptor = ArgumentCaptor.forClass(Book.class);
+        verify(bookRepository).updateBook(bookCaptor.capture());
+        Book returnedBook = bookCaptor.getValue();
+        assertTrue(returnedBook.available());
+        assertNull(returnedBook.currentUser());
+        assertNull(returnedBook.dueDate());
+        assertEquals(BOOK_TITLE, returnedBook.title());
+        verify(bookRepository).removeBookFromUser(user, returnedBook);
+        if (expectCharge) {
+            verify(paymentService).chargeLateFee(user, expectedFee);
+        } else {
+            verify(paymentService, never()).chargeLateFee(any(), anyInt());
+        }
     }
 }
