@@ -18,7 +18,7 @@ JaCoCo HTML is written to `target/site/jacoco/`. This repository also keeps a co
 
 ## Final branch coverage (`RentalService`)
 
-**100%** — **0 of 50** missed branches (verified from `coverage-report/jacoco.xml` after `mvn clean test`).
+**100%** — **0 missed** of **50** branches (JaCoCo “Missed Branches”; verified from `coverage-report/jacoco.xml` after `mvn clean test`).
 
 ## Complexity refactor
 
@@ -38,15 +38,16 @@ Fee rate and membership grace-day logic were extracted into private helpers `get
 |------|--------|
 | `screenshots/01-before-cxty.png` | Pre-refactor Cxty (`calculateLateFee` = 12) |
 | `screenshots/02-after-cxty.png` | Post-refactor Cxty (`calculateLateFee` = 5) |
-| `screenshots/03-final-coverage.png` | Final 100% branch coverage (0 of 50) |
+| `screenshots/03-final-coverage.png` | Final 100% branch coverage (**0 missed** of **50** branches) |
 
 ## AI log
 
 | Path | Description |
 |------|-------------|
-| `ai-log/history.md` | Consolidated Cursor Agent conversation (chronological) |
+| `ai-log/` | AI usage log folder |
+| `ai-log/history.md` | Chronological AI conversation history |
 
-**Tool used:** Cursor Agent (Composer).
+**Tools used:** IntelliJ IDEA, Cursor IDE, ChatGPT.com.
 
 ## Project layout
 

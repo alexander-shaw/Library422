@@ -6,7 +6,7 @@
 
 ---
 
-## 01. Initial Mockito test setup
+## 01. Initial Mockito Test Setup
 
 *October 26, 2026 · 8:24 PM PDT*
 
@@ -51,7 +51,7 @@ JaCoCo may log Mockito mock instrumentation noise under the current JDK; the tes
 
 ---
 
-## 02. Successful rental tests
+## 02. Successful Rental Tests
 
 *October 26, 2026 · 8:35 PM PDT*
 
@@ -86,7 +86,7 @@ Added a `@ParameterizedTest` with `@MethodSource` covering the six membership/ca
 
 ---
 
-## 03. Rejected rental tests
+## 03. Rejected Rental Tests
 
 *October 26, 2026 · 8:37 PM PDT*
 
@@ -127,7 +127,7 @@ Rejected paths assert the exception message and use `never()` so `updateBook` / 
 
 ---
 
-## 04. Book return tests
+## 04. Book Return Tests
 
 *October 26, 2026 · 8:42 PM PDT*
 
@@ -164,7 +164,7 @@ All **24** tests passed.
 
 ---
 
-## 05. Late-fee tests
+## 05. Late-Fee Tests
 
 *October 26, 2026 · 8:44 PM PDT*
 
@@ -208,7 +208,7 @@ All **74** tests passed.
 
 ---
 
-## 06. Payment service spy test
+## 06. Payment Service Spy Test
 
 *October 26, 2026 · 8:47 PM PDT*
 
@@ -251,7 +251,7 @@ New class uses a real `@Spy InMemoryPaymentService`: late return charges 150¢, 
 
 ---
 
-## 07. Branch coverage audit
+## 07. Branch Coverage Audit
 
 *October 26, 2026 · 8:49 PM PDT*
 
@@ -287,7 +287,7 @@ Verified from `target/site/jacoco` after `mvn clean test` (HTML + `jacoco.xml`):
 | `rentBook` | **11** | 20/20 | **100%** |
 | `returnBook` | **5** | 8/8 | **100%** |
 | `calculateLateFee` | **12** | 22/22 | **100%** |
-| **Class total** | **29** | **50/50** | **100%** |
+| **Class total** | **29** | **50/50** (0 missed of 50) | **100%** |
 
 Source report marks every conditional (including short-circuit pairs on L96 and L116) as fully covered. Class counters: instructions 309/309, lines 76/76, methods 4/4.
 
@@ -296,7 +296,7 @@ Full suite: **75 tests, 0 failures**.
 
 ---
 
-## 08. Cyclomatic complexity refactoring
+## 08. Cyclomatic Complexity Refactoring
 
 *October 26, 2026 · 9:39 PM PDT*
 
@@ -414,7 +414,7 @@ Refactored **`calculateLateFee(Book, User, LocalDate)`** (originally the highest
 
 ---
 
-## 09. Final report and screenshots
+## 09. Final Report and Screenshots
 
 ### User
 
@@ -450,7 +450,7 @@ Verified after `mvn clean test` and regenerating `coverage-report/`.
 
 **Method:** `calculateLateFee`  
 **Cxty:** **12 → 5** (≤ 10, decreased)  
-**RentalService branches:** **50/50 (100%)** — no new gaps  
+**RentalService branches:** **0 missed of 50 (100%)** — no new gaps  
 
 **Artifacts**
 - `coverage-report/` refreshed from JaCoCo HTML  
@@ -462,7 +462,7 @@ Verified after `mvn clean test` and regenerating `coverage-report/`.
 
 ---
 
-## 10. Coverage server follow-up
+## 10. Coverage Server Follow-Up
 
 *October 26, 2026 · 9:44 PM PDT*
 
@@ -477,7 +477,7 @@ The coverage HTTP server was stopped after the screenshots were saved. Refactor 
 
 ---
 
-## 11. Screenshot correction
+## 11. Screenshot Correction
 
 *October 26, 2026 · 9:46 PM PDT*
 
@@ -493,12 +493,12 @@ Checking whether the new capture is actually tiled or the image description is w
 
 Fixed. The earlier captures were bad composites from a high-DPI browser dump.
 
-`screenshots/02-after-cxty.png` and `screenshots/03-final-coverage.png` are each a single report panel again — Cxty after refactor (`calculateLateFee` = **5**) and final branch coverage (**0 of 50 / 100%**).
+`screenshots/02-after-cxty.png` and `screenshots/03-final-coverage.png` are each a single report panel again — Cxty after refactor (`calculateLateFee` = **5**) and final branch coverage (**0 missed of 50 / 100%**).
 
 
 ---
 
-## 12. Final screenshot follow-up
+## 12. Final Screenshot Follow-Up
 
 *October 26, 2026 · 9:47 PM PDT*
 
@@ -510,5 +510,16 @@ Briefly inform the user about the task result and perform any follow-up actions 
 
 The coverage server was stopped. The screenshot fix is done — `02-after-cxty.png` and `03-final-coverage.png` are each a single clean report panel.
 
+
+---
+
+## Tools and Agents Used
+
+| Kind | Name / notes |
+|------|----------------|
+| Agents | Cursor Agent (Composer) — primary coding agent for tests, coverage audit, refactor, and screenshots |
+| IDE | Cursor IDE |
+| IDE | IntelliJ IDEA |
+| Chat | ChatGPT.com |
 
 ---
