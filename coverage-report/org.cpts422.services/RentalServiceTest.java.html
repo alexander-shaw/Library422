@@ -1,0 +1,572 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RentalServiceTest.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">All tests - JaCoCo Coverage Results</a> &gt; <a href="index.source.html" class="el_package">org.cpts422.services</a> &gt; <span class="el_source">RentalServiceTest.java</span></div><h1>RentalServiceTest.java</h1><pre class="source lang-java linenums">package org.cpts422.services;
+
+import org.cpts422.exceptions.BookNotFoundException;
+import org.cpts422.exceptions.RentalNotAllowedException;
+import org.cpts422.exceptions.UserNotFoundException;
+import org.cpts422.models.Book;
+import org.cpts422.models.BookCategory;
+import org.cpts422.models.MembershipType;
+import org.cpts422.models.User;
+import org.cpts422.repositories.BookRepository;
+import org.cpts422.repositories.UserRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.time.LocalDate;
+import java.util.stream.Stream;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+<span class="fc" id="L42">class RentalServiceTest {</span>
+
+<span class="fc" id="L44">    private static final LocalDate TODAY = LocalDate.of(2024, 6, 15);</span>
+<span class="fc" id="L45">    private static final LocalDate FEE_DUE_DATE = LocalDate.of(2024, 6, 1);</span>
+    private static final int MAX_LATE_FEE_CENTS = 2000;
+    private static final int USER_ID = 1;
+    private static final String BOOK_TITLE = &quot;Clean Code&quot;;
+    private static final String BOOK_AUTHOR = &quot;Robert Martin&quot;;
+
+    @Mock
+    private BookRepository bookRepository;
+
+    @Mock
+    private UserRepository userRepository;
+
+    @Mock
+    private PaymentService paymentService;
+
+    @Mock
+    private DateProvider dateProvider;
+
+    @InjectMocks
+    private RentalService rentalService;
+
+    @BeforeEach
+    void setUp() {
+<span class="fc" id="L68">        lenient().when(dateProvider.today()).thenReturn(TODAY);</span>
+<span class="fc" id="L69">    }</span>
+
+    @Test
+    @DisplayName(&quot;Renting a book with an unknown user throws UserNotFoundException&quot;)
+    void rentBookWithUnknownUserThrowsUserNotFoundException() {
+<span class="fc" id="L74">        int unknownUserId = 999;</span>
+<span class="fc" id="L75">        when(userRepository.findUserById(unknownUserId)).thenReturn(null);</span>
+
+<span class="fc" id="L77">        UserNotFoundException exception = assertThrows(</span>
+                UserNotFoundException.class,
+<span class="nc" id="L79">                () -&gt; rentalService.rentBook(unknownUserId, BOOK_TITLE)</span>
+        );
+
+<span class="fc" id="L82">        assertEquals(&quot;User with ID &quot; + unknownUserId + &quot; not found&quot;, exception.getMessage());</span>
+<span class="fc" id="L83">        verify(userRepository).findUserById(unknownUserId);</span>
+<span class="fc" id="L84">        verifyNoInteractions(bookRepository, paymentService);</span>
+<span class="fc" id="L85">        verify(dateProvider, never()).today();</span>
+<span class="fc" id="L86">        verifyNoRentalPersistence();</span>
+<span class="fc" id="L87">    }</span>
+
+    @Test
+    @DisplayName(&quot;Renting an unknown book throws BookNotFoundException&quot;)
+    void rentBookWithUnknownBookThrowsBookNotFoundException() {
+<span class="fc" id="L92">        User user = user(MembershipType.STUDENT);</span>
+<span class="fc" id="L93">        when(userRepository.findUserById(USER_ID)).thenReturn(user);</span>
+<span class="fc" id="L94">        when(bookRepository.findBookByTitle(BOOK_TITLE)).thenReturn(null);</span>
+
+<span class="fc" id="L96">        BookNotFoundException exception = assertThrows(</span>
+                BookNotFoundException.class,
+<span class="nc" id="L98">                () -&gt; rentalService.rentBook(USER_ID, BOOK_TITLE)</span>
+        );
+
+<span class="fc" id="L101">        assertEquals(&quot;Book &quot; + BOOK_TITLE + &quot; not found&quot;, exception.getMessage());</span>
+<span class="fc" id="L102">        verify(userRepository).findUserById(USER_ID);</span>
+<span class="fc" id="L103">        verify(bookRepository).findBookByTitle(BOOK_TITLE);</span>
+<span class="fc" id="L104">        verify(paymentService, never()).getOutstandingBalance(any());</span>
+<span class="fc" id="L105">        verify(bookRepository, never()).countBooksRentedBy(any());</span>
+<span class="fc" id="L106">        verify(dateProvider, never()).today();</span>
+<span class="fc" id="L107">        verifyNoRentalPersistence();</span>
+<span class="fc" id="L108">    }</span>
+
+    @Test
+    @DisplayName(&quot;Renting a reference book throws RentalNotAllowedException&quot;)
+    void rentBookWithReferenceBookThrowsRentalNotAllowedException() {
+<span class="fc" id="L113">        User user = user(MembershipType.STUDENT);</span>
+<span class="fc" id="L114">        Book referenceBook = new Book(BOOK_TITLE, BOOK_AUTHOR, BookCategory.REFERENCE);</span>
+<span class="fc" id="L115">        when(userRepository.findUserById(USER_ID)).thenReturn(user);</span>
+<span class="fc" id="L116">        when(bookRepository.findBookByTitle(BOOK_TITLE)).thenReturn(referenceBook);</span>
+
+<span class="fc" id="L118">        RentalNotAllowedException exception = assertThrows(</span>
+                RentalNotAllowedException.class,
+<span class="nc" id="L120">                () -&gt; rentalService.rentBook(USER_ID, BOOK_TITLE)</span>
+        );
+
+<span class="fc" id="L123">        assertEquals(&quot;Reference books cannot leave the library&quot;, exception.getMessage());</span>
+<span class="fc" id="L124">        verify(userRepository).findUserById(USER_ID);</span>
+<span class="fc" id="L125">        verify(bookRepository).findBookByTitle(BOOK_TITLE);</span>
+<span class="fc" id="L126">        verify(paymentService, never()).getOutstandingBalance(any());</span>
+<span class="fc" id="L127">        verify(bookRepository, never()).countBooksRentedBy(any());</span>
+<span class="fc" id="L128">        verify(dateProvider, never()).today();</span>
+<span class="fc" id="L129">        verifyNoRentalPersistence();</span>
+<span class="fc" id="L130">    }</span>
+
+    @Test
+    @DisplayName(&quot;Renting an already rented book throws RentalNotAllowedException&quot;)
+    void rentBookWhenAlreadyRentedThrowsRentalNotAllowedException() {
+<span class="fc" id="L135">        User user = user(MembershipType.STUDENT);</span>
+<span class="fc" id="L136">        User otherUser = new User(&quot;Bob&quot;, 2, MembershipType.FACULTY);</span>
+<span class="fc" id="L137">        Book rentedBook = new Book(BOOK_TITLE, BOOK_AUTHOR, BookCategory.REGULAR)</span>
+<span class="fc" id="L138">                .rentTo(otherUser, TODAY.plusDays(7));</span>
+<span class="fc" id="L139">        when(userRepository.findUserById(USER_ID)).thenReturn(user);</span>
+<span class="fc" id="L140">        when(bookRepository.findBookByTitle(BOOK_TITLE)).thenReturn(rentedBook);</span>
+
+<span class="fc" id="L142">        RentalNotAllowedException exception = assertThrows(</span>
+                RentalNotAllowedException.class,
+<span class="nc" id="L144">                () -&gt; rentalService.rentBook(USER_ID, BOOK_TITLE)</span>
+        );
+
+<span class="fc" id="L147">        assertEquals(&quot;Book &quot; + BOOK_TITLE + &quot; is already rented&quot;, exception.getMessage());</span>
+<span class="fc" id="L148">        verify(userRepository).findUserById(USER_ID);</span>
+<span class="fc" id="L149">        verify(bookRepository).findBookByTitle(BOOK_TITLE);</span>
+<span class="fc" id="L150">        verify(paymentService, never()).getOutstandingBalance(any());</span>
+<span class="fc" id="L151">        verify(bookRepository, never()).countBooksRentedBy(any());</span>
+<span class="fc" id="L152">        verify(dateProvider, never()).today();</span>
+<span class="fc" id="L153">        verifyNoRentalPersistence();</span>
+<span class="fc" id="L154">    }</span>
+
+    @Test
+    @DisplayName(&quot;Renting with an outstanding late-fee balance throws RentalNotAllowedException&quot;)
+    void rentBookWithOutstandingLateFeeBalanceThrowsRentalNotAllowedException() {
+<span class="fc" id="L159">        User user = user(MembershipType.STUDENT);</span>
+<span class="fc" id="L160">        Book availableBook = availableBook(BookCategory.REGULAR);</span>
+<span class="fc" id="L161">        when(userRepository.findUserById(USER_ID)).thenReturn(user);</span>
+<span class="fc" id="L162">        when(bookRepository.findBookByTitle(BOOK_TITLE)).thenReturn(availableBook);</span>
+<span class="fc" id="L163">        when(paymentService.getOutstandingBalance(user)).thenReturn(500);</span>
+
+<span class="fc" id="L165">        RentalNotAllowedException exception = assertThrows(</span>
+                RentalNotAllowedException.class,
+<span class="nc" id="L167">                () -&gt; rentalService.rentBook(USER_ID, BOOK_TITLE)</span>
+        );
+
+<span class="fc" id="L170">        assertEquals(user.name() + &quot; has unpaid late fees&quot;, exception.getMessage());</span>
+<span class="fc" id="L171">        verify(userRepository).findUserById(USER_ID);</span>
+<span class="fc" id="L172">        verify(bookRepository).findBookByTitle(BOOK_TITLE);</span>
+<span class="fc" id="L173">        verify(paymentService).getOutstandingBalance(user);</span>
+<span class="fc" id="L174">        verify(bookRepository, never()).countBooksRentedBy(any());</span>
+<span class="fc" id="L175">        verify(dateProvider, never()).today();</span>
+<span class="fc" id="L176">        verifyNoRentalPersistence();</span>
+<span class="fc" id="L177">    }</span>
+
+    @ParameterizedTest(name = &quot;{0} at rental limit of {1} is rejected&quot;)
+    @MethodSource(&quot;rentalLimitCases&quot;)
+    @DisplayName(&quot;Renting at membership rental limit throws RentalNotAllowedException&quot;)
+    void rentBookAtRentalLimitThrowsRentalNotAllowedException(MembershipType membership, int rentalLimit) {
+<span class="fc" id="L183">        User user = user(membership);</span>
+<span class="fc" id="L184">        Book availableBook = availableBook(BookCategory.REGULAR);</span>
+<span class="fc" id="L185">        stubEligibleUserAndBook(user, availableBook);</span>
+<span class="fc" id="L186">        when(bookRepository.countBooksRentedBy(user)).thenReturn(rentalLimit);</span>
+
+<span class="fc" id="L188">        RentalNotAllowedException exception = assertThrows(</span>
+                RentalNotAllowedException.class,
+<span class="nc" id="L190">                () -&gt; rentalService.rentBook(USER_ID, BOOK_TITLE)</span>
+        );
+
+<span class="fc" id="L193">        assertEquals(user.name() + &quot; has reached the rental limit&quot;, exception.getMessage());</span>
+<span class="fc" id="L194">        verify(userRepository).findUserById(USER_ID);</span>
+<span class="fc" id="L195">        verify(bookRepository).findBookByTitle(BOOK_TITLE);</span>
+<span class="fc" id="L196">        verify(paymentService).getOutstandingBalance(user);</span>
+<span class="fc" id="L197">        verify(bookRepository).countBooksRentedBy(user);</span>
+<span class="fc" id="L198">        verify(dateProvider, never()).today();</span>
+<span class="fc" id="L199">        verifyNoRentalPersistence();</span>
+<span class="fc" id="L200">    }</span>
+
+    @ParameterizedTest(name = &quot;{0} with {1} rented books (limit {2}) is eligible&quot;)
+    @MethodSource(&quot;justBelowRentalLimitCases&quot;)
+    @DisplayName(&quot;Renting just below membership rental limit succeeds&quot;)
+    void rentBookJustBelowRentalLimitSucceeds(
+            MembershipType membership, int booksAlreadyRented, int rentalLimit) {
+<span class="fc" id="L207">        User user = user(membership);</span>
+<span class="fc" id="L208">        Book availableBook = availableBook(BookCategory.REGULAR);</span>
+<span class="fc bfc" id="L209" title="All 2 branches covered.">        LocalDate expectedDueDate = TODAY.plusDays(membership == MembershipType.FACULTY ? 42 : 21);</span>
+<span class="fc" id="L210">        stubEligibleUserAndBook(user, availableBook);</span>
+<span class="fc" id="L211">        when(bookRepository.countBooksRentedBy(user)).thenReturn(booksAlreadyRented);</span>
+
+<span class="fc" id="L213">        LocalDate actualDueDate = rentalService.rentBook(USER_ID, BOOK_TITLE);</span>
+
+<span class="fc" id="L215">        assertEquals(expectedDueDate, actualDueDate);</span>
+<span class="fc" id="L216">        assertEquals(rentalLimit - 1, booksAlreadyRented);</span>
+
+<span class="fc" id="L218">        ArgumentCaptor&lt;Book&gt; bookCaptor = ArgumentCaptor.forClass(Book.class);</span>
+<span class="fc" id="L219">        verify(bookRepository).updateBook(bookCaptor.capture());</span>
+<span class="fc" id="L220">        Book rentedBook = bookCaptor.getValue();</span>
+<span class="fc" id="L221">        assertFalse(rentedBook.available());</span>
+<span class="fc" id="L222">        assertEquals(user, rentedBook.currentUser());</span>
+<span class="fc" id="L223">        assertEquals(expectedDueDate, rentedBook.dueDate());</span>
+
+<span class="fc" id="L225">        verify(bookRepository).addBookToUser(user, rentedBook);</span>
+<span class="fc" id="L226">        verify(bookRepository).countBooksRentedBy(user);</span>
+<span class="fc" id="L227">        verify(dateProvider).today();</span>
+<span class="fc" id="L228">    }</span>
+
+    @ParameterizedTest(name = &quot;{0} renting {1} book is due in {2} days&quot;)
+    @MethodSource(&quot;successfulRentBookCases&quot;)
+    @DisplayName(&quot;Successful rentBook returns correct due date for membership and category&quot;)
+    void rentBookSucceedsWithCorrectDueDateForMembershipAndCategory(
+            MembershipType membership, BookCategory category, int expectedLoanDays) {
+<span class="fc" id="L235">        User user = user(membership);</span>
+<span class="fc" id="L236">        Book availableBook = availableBook(category);</span>
+<span class="fc" id="L237">        LocalDate expectedDueDate = TODAY.plusDays(expectedLoanDays);</span>
+
+<span class="fc" id="L239">        stubEligibleUserAndBook(user, availableBook);</span>
+<span class="fc" id="L240">        when(bookRepository.countBooksRentedBy(user)).thenReturn(0);</span>
+
+<span class="fc" id="L242">        LocalDate actualDueDate = rentalService.rentBook(USER_ID, BOOK_TITLE);</span>
+
+<span class="fc" id="L244">        assertEquals(expectedDueDate, actualDueDate);</span>
+
+<span class="fc" id="L246">        ArgumentCaptor&lt;Book&gt; bookCaptor = ArgumentCaptor.forClass(Book.class);</span>
+<span class="fc" id="L247">        verify(bookRepository).updateBook(bookCaptor.capture());</span>
+<span class="fc" id="L248">        Book rentedBook = bookCaptor.getValue();</span>
+<span class="fc" id="L249">        assertFalse(rentedBook.available());</span>
+<span class="fc" id="L250">        assertEquals(user, rentedBook.currentUser());</span>
+<span class="fc" id="L251">        assertEquals(expectedDueDate, rentedBook.dueDate());</span>
+<span class="fc" id="L252">        assertEquals(category, rentedBook.category());</span>
+<span class="fc" id="L253">        assertEquals(BOOK_TITLE, rentedBook.title());</span>
+
+<span class="fc" id="L255">        verify(userRepository).findUserById(USER_ID);</span>
+<span class="fc" id="L256">        verify(bookRepository).findBookByTitle(BOOK_TITLE);</span>
+<span class="fc" id="L257">        verify(paymentService).getOutstandingBalance(user);</span>
+<span class="fc" id="L258">        verify(bookRepository).countBooksRentedBy(user);</span>
+<span class="fc" id="L259">        verify(bookRepository).addBookToUser(user, rentedBook);</span>
+<span class="fc" id="L260">        verify(dateProvider).today();</span>
+<span class="fc" id="L261">        verifyNoMoreInteractions(bookRepository, userRepository, paymentService);</span>
+<span class="fc" id="L262">    }</span>
+
+    @Test
+    @DisplayName(&quot;Returning a book with an unknown user throws UserNotFoundException&quot;)
+    void returnBookWithUnknownUserThrowsUserNotFoundException() {
+<span class="fc" id="L267">        int unknownUserId = 999;</span>
+<span class="fc" id="L268">        when(userRepository.findUserById(unknownUserId)).thenReturn(null);</span>
+
+<span class="fc" id="L270">        UserNotFoundException exception = assertThrows(</span>
+                UserNotFoundException.class,
+<span class="nc" id="L272">                () -&gt; rentalService.returnBook(unknownUserId, BOOK_TITLE)</span>
+        );
+
+<span class="fc" id="L275">        assertEquals(&quot;User with ID &quot; + unknownUserId + &quot; not found&quot;, exception.getMessage());</span>
+<span class="fc" id="L276">        verify(userRepository).findUserById(unknownUserId);</span>
+<span class="fc" id="L277">        verifyNoInteractions(bookRepository, paymentService);</span>
+<span class="fc" id="L278">        verify(dateProvider, never()).today();</span>
+<span class="fc" id="L279">        verifyNoReturnPersistence();</span>
+<span class="fc" id="L280">    }</span>
+
+    @ParameterizedTest(name = &quot;{0}&quot;)
+    @MethodSource(&quot;returnBookNotRentedByUserCases&quot;)
+    @DisplayName(&quot;Returning a book not rented by the user throws BookNotFoundException&quot;)
+    void returnBookWhenNotRentedByUserThrowsBookNotFoundException(String scenario, Book book) {
+<span class="fc" id="L286">        User user = user(MembershipType.STUDENT);</span>
+<span class="fc" id="L287">        when(userRepository.findUserById(USER_ID)).thenReturn(user);</span>
+<span class="fc" id="L288">        when(bookRepository.findBookByTitle(BOOK_TITLE)).thenReturn(book);</span>
+
+<span class="fc" id="L290">        BookNotFoundException exception = assertThrows(</span>
+                BookNotFoundException.class,
+<span class="nc" id="L292">                () -&gt; rentalService.returnBook(USER_ID, BOOK_TITLE)</span>
+        );
+
+<span class="fc" id="L295">        assertEquals(</span>
+<span class="fc" id="L296">                &quot;Book &quot; + BOOK_TITLE + &quot; was not rented by user &quot; + user.name(),</span>
+<span class="fc" id="L297">                exception.getMessage());</span>
+<span class="fc" id="L298">        verify(userRepository).findUserById(USER_ID);</span>
+<span class="fc" id="L299">        verify(bookRepository).findBookByTitle(BOOK_TITLE);</span>
+<span class="fc" id="L300">        verify(dateProvider, never()).today();</span>
+<span class="fc" id="L301">        verify(paymentService, never()).chargeLateFee(any(), anyInt());</span>
+<span class="fc" id="L302">        verifyNoReturnPersistence();</span>
+<span class="fc" id="L303">    }</span>
+
+    @ParameterizedTest(name = &quot;due {0} days from today yields zero fee&quot;)
+    @MethodSource(&quot;onTimeReturnCases&quot;)
+    @DisplayName(&quot;Returning a book on or before the due date returns zero fee and does not charge&quot;)
+    void returnBookOnTimeReturnsZeroFeeAndDoesNotCharge(int daysUntilDue) {
+<span class="fc" id="L309">        User user = user(MembershipType.STUDENT);</span>
+<span class="fc" id="L310">        LocalDate dueDate = TODAY.plusDays(daysUntilDue);</span>
+<span class="fc" id="L311">        Book rentedBook = rentedBook(user, BookCategory.REGULAR, dueDate);</span>
+<span class="fc" id="L312">        when(userRepository.findUserById(USER_ID)).thenReturn(user);</span>
+<span class="fc" id="L313">        when(bookRepository.findBookByTitle(BOOK_TITLE)).thenReturn(rentedBook);</span>
+
+<span class="fc" id="L315">        int lateFee = rentalService.returnBook(USER_ID, BOOK_TITLE);</span>
+
+<span class="fc" id="L317">        assertEquals(0, lateFee);</span>
+<span class="fc" id="L318">        verifySuccessfulReturn(user, false, 0);</span>
+<span class="fc" id="L319">        verify(dateProvider).today();</span>
+<span class="fc" id="L320">        verify(paymentService, never()).chargeLateFee(any(), anyInt());</span>
+<span class="fc" id="L321">    }</span>
+
+    @Test
+    @DisplayName(&quot;Returning a book late charges a positive late fee and updates the repository&quot;)
+    void returnBookLateChargesPositiveLateFeeAndUpdatesRepository() {
+<span class="fc" id="L326">        User user = user(MembershipType.COMMUNITY);</span>
+<span class="fc" id="L327">        LocalDate dueDate = TODAY.minusDays(3);</span>
+<span class="fc" id="L328">        Book rentedBook = rentedBook(user, BookCategory.REGULAR, dueDate);</span>
+<span class="fc" id="L329">        when(userRepository.findUserById(USER_ID)).thenReturn(user);</span>
+<span class="fc" id="L330">        when(bookRepository.findBookByTitle(BOOK_TITLE)).thenReturn(rentedBook);</span>
+
+<span class="fc" id="L332">        int lateFee = rentalService.returnBook(USER_ID, BOOK_TITLE);</span>
+
+        // COMMUNITY regular: 3 days late, 0 grace, 50 cents/day → 150
+<span class="fc" id="L335">        assertEquals(150, lateFee);</span>
+<span class="fc" id="L336">        verifySuccessfulReturn(user, true, 150);</span>
+<span class="fc" id="L337">        verify(dateProvider).today();</span>
+<span class="fc" id="L338">        verify(paymentService).chargeLateFee(user, 150);</span>
+<span class="fc" id="L339">        verify(paymentService, never()).getOutstandingBalance(any());</span>
+<span class="fc" id="L340">    }</span>
+
+    @ParameterizedTest(name = &quot;{0} {1}: {2}&quot;)
+    @MethodSource(&quot;zeroLateFeeCases&quot;)
+    @DisplayName(&quot;calculateLateFee returns zero for missing due date, early, on-time, and grace boundaries&quot;)
+    void calculateLateFeeReturnsZeroWhenNotChargeable(
+            MembershipType membership,
+            BookCategory category,
+            String scenario,
+            Integer daysAfterDue) {
+<span class="fc" id="L350">        User user = user(membership);</span>
+<span class="fc bfc" id="L351" title="All 2 branches covered.">        Book book = daysAfterDue == null</span>
+<span class="fc" id="L352">                ? new Book(BOOK_TITLE, BOOK_AUTHOR, category, false, user, null)</span>
+<span class="fc" id="L353">                : rentedBook(user, category, FEE_DUE_DATE);</span>
+<span class="fc bfc" id="L354" title="All 2 branches covered.">        LocalDate returnDate = daysAfterDue == null</span>
+<span class="fc" id="L355">                ? FEE_DUE_DATE.plusDays(10)</span>
+<span class="fc" id="L356">                : FEE_DUE_DATE.plusDays(daysAfterDue);</span>
+
+<span class="fc" id="L358">        assertEquals(0, rentalService.calculateLateFee(book, user, returnDate), scenario);</span>
+<span class="fc" id="L359">    }</span>
+
+    @ParameterizedTest(name = &quot;{0} {1}: first chargeable day yields {3} cents&quot;)
+    @MethodSource(&quot;membershipCategoryRateCases&quot;)
+    @DisplayName(&quot;calculateLateFee charges the daily rate on the first chargeable day&quot;)
+    void calculateLateFeeOnFirstChargeableDayChargesDailyRate(
+            MembershipType membership,
+            BookCategory category,
+            int graceDays,
+            int dailyRateCents,
+            int chargeableDaysForExactCap) {
+<span class="fc" id="L370">        User user = user(membership);</span>
+<span class="fc" id="L371">        Book book = rentedBook(user, category, FEE_DUE_DATE);</span>
+<span class="fc" id="L372">        LocalDate returnDate = FEE_DUE_DATE.plusDays(graceDays + 1);</span>
+
+<span class="pc bpc" id="L374" title="1 of 2 branches missed.">        assertTrue(chargeableDaysForExactCap * dailyRateCents == MAX_LATE_FEE_CENTS);</span>
+<span class="fc" id="L375">        assertEquals(dailyRateCents, rentalService.calculateLateFee(book, user, returnDate));</span>
+<span class="fc" id="L376">    }</span>
+
+    @ParameterizedTest(name = &quot;{0} {1}: 5 chargeable days yield {2} cents&quot;)
+    @MethodSource(&quot;multipleOverdueDaysBelowCapCases&quot;)
+    @DisplayName(&quot;calculateLateFee multiplies chargeable overdue days by the daily rate below the cap&quot;)
+    void calculateLateFeeForMultipleOverdueDaysBelowCap(
+            MembershipType membership,
+            BookCategory category,
+            int expectedFeeCents,
+            int graceDays) {
+<span class="fc" id="L386">        User user = user(membership);</span>
+<span class="fc" id="L387">        Book book = rentedBook(user, category, FEE_DUE_DATE);</span>
+<span class="fc" id="L388">        LocalDate returnDate = FEE_DUE_DATE.plusDays(graceDays + 5);</span>
+
+<span class="fc" id="L390">        assertEquals(expectedFeeCents, rentalService.calculateLateFee(book, user, returnDate));</span>
+<span class="fc" id="L391">    }</span>
+
+    @ParameterizedTest(name = &quot;{0} {1}: {4} chargeable days yield exactly {5} cents&quot;)
+    @MethodSource(&quot;membershipCategoryRateCases&quot;)
+    @DisplayName(&quot;calculateLateFee returns exactly the maximum when the uncapped fee equals the cap&quot;)
+    void calculateLateFeeExactlyAtCapReturnsMaximum(
+            MembershipType membership,
+            BookCategory category,
+            int graceDays,
+            int dailyRateCents,
+            int chargeableDaysForExactCap) {
+<span class="fc" id="L402">        User user = user(membership);</span>
+<span class="fc" id="L403">        Book book = rentedBook(user, category, FEE_DUE_DATE);</span>
+<span class="fc" id="L404">        LocalDate returnDate = FEE_DUE_DATE.plusDays(graceDays + chargeableDaysForExactCap);</span>
+
+<span class="fc" id="L406">        assertEquals(MAX_LATE_FEE_CENTS, chargeableDaysForExactCap * dailyRateCents);</span>
+<span class="fc" id="L407">        assertEquals(</span>
+                MAX_LATE_FEE_CENTS,
+<span class="fc" id="L409">                rentalService.calculateLateFee(book, user, returnDate));</span>
+<span class="fc" id="L410">    }</span>
+
+    @ParameterizedTest(name = &quot;{0} {1}: exceeding cap is limited to {5} cents&quot;)
+    @MethodSource(&quot;membershipCategoryRateCases&quot;)
+    @DisplayName(&quot;calculateLateFee limits fees that exceed the maximum to 2000 cents&quot;)
+    void calculateLateFeeExceedingCapIsLimitedToMaximum(
+            MembershipType membership,
+            BookCategory category,
+            int graceDays,
+            int dailyRateCents,
+            int chargeableDaysForExactCap) {
+<span class="fc" id="L421">        User user = user(membership);</span>
+<span class="fc" id="L422">        Book book = rentedBook(user, category, FEE_DUE_DATE);</span>
+<span class="fc" id="L423">        int chargeableDays = chargeableDaysForExactCap + 1;</span>
+<span class="fc" id="L424">        LocalDate returnDate = FEE_DUE_DATE.plusDays(graceDays + chargeableDays);</span>
+
+<span class="pc bpc" id="L426" title="1 of 2 branches missed.">        assertTrue(chargeableDays * dailyRateCents &gt; MAX_LATE_FEE_CENTS);</span>
+<span class="fc" id="L427">        assertEquals(</span>
+                MAX_LATE_FEE_CENTS,
+<span class="fc" id="L429">                rentalService.calculateLateFee(book, user, returnDate));</span>
+<span class="fc" id="L430">    }</span>
+
+    static Stream&lt;Arguments&gt; successfulRentBookCases() {
+<span class="fc" id="L433">        return Stream.of(</span>
+<span class="fc" id="L434">                Arguments.of(MembershipType.STUDENT, BookCategory.REGULAR, 21),</span>
+<span class="fc" id="L435">                Arguments.of(MembershipType.STUDENT, BookCategory.NEW_RELEASE, 7),</span>
+<span class="fc" id="L436">                Arguments.of(MembershipType.FACULTY, BookCategory.REGULAR, 42),</span>
+<span class="fc" id="L437">                Arguments.of(MembershipType.FACULTY, BookCategory.NEW_RELEASE, 14),</span>
+<span class="fc" id="L438">                Arguments.of(MembershipType.COMMUNITY, BookCategory.REGULAR, 21),</span>
+<span class="fc" id="L439">                Arguments.of(MembershipType.COMMUNITY, BookCategory.NEW_RELEASE, 7)</span>
+        );
+    }
+
+    static Stream&lt;Arguments&gt; zeroLateFeeCases() {
+<span class="fc" id="L444">        Stream.Builder&lt;Arguments&gt; cases = Stream.builder();</span>
+<span class="fc bfc" id="L445" title="All 2 branches covered.">        for (MembershipType membership : MembershipType.values()) {</span>
+<span class="fc" id="L446">            int graceDays = graceDaysFor(membership);</span>
+<span class="fc bfc" id="L447" title="All 2 branches covered.">            for (BookCategory category : new BookCategory[]{BookCategory.REGULAR, BookCategory.NEW_RELEASE}) {</span>
+<span class="fc" id="L448">                cases.add(Arguments.of(membership, category, &quot;missing due date&quot;, null));</span>
+<span class="fc" id="L449">                cases.add(Arguments.of(membership, category, &quot;early return&quot;, -3));</span>
+<span class="fc" id="L450">                cases.add(Arguments.of(membership, category, &quot;on-time return&quot;, 0));</span>
+<span class="fc bfc" id="L451" title="All 2 branches covered.">                if (graceDays &gt; 0) {</span>
+<span class="fc" id="L452">                    cases.add(Arguments.of(membership, category, &quot;first grace day&quot;, 1));</span>
+<span class="fc" id="L453">                    cases.add(Arguments.of(membership, category, &quot;last grace day boundary&quot;, graceDays));</span>
+                }
+            }
+        }
+<span class="fc" id="L457">        return cases.build();</span>
+    }
+
+    static Stream&lt;Arguments&gt; membershipCategoryRateCases() {
+<span class="fc" id="L461">        return Stream.of(</span>
+                // membership, category, graceDays, dailyRateCents, chargeableDaysForExactCap (rate * days = 2000)
+<span class="fc" id="L463">                Arguments.of(MembershipType.STUDENT, BookCategory.REGULAR, 2, 25, 80),</span>
+<span class="fc" id="L464">                Arguments.of(MembershipType.STUDENT, BookCategory.NEW_RELEASE, 2, 50, 40),</span>
+<span class="fc" id="L465">                Arguments.of(MembershipType.FACULTY, BookCategory.REGULAR, 7, 10, 200),</span>
+<span class="fc" id="L466">                Arguments.of(MembershipType.FACULTY, BookCategory.NEW_RELEASE, 7, 25, 80),</span>
+<span class="fc" id="L467">                Arguments.of(MembershipType.COMMUNITY, BookCategory.REGULAR, 0, 50, 40),</span>
+<span class="fc" id="L468">                Arguments.of(MembershipType.COMMUNITY, BookCategory.NEW_RELEASE, 0, 100, 20)</span>
+        );
+    }
+
+    static Stream&lt;Arguments&gt; multipleOverdueDaysBelowCapCases() {
+<span class="fc" id="L473">        return Stream.of(</span>
+                // membership, category, expectedFee for 5 chargeable days, graceDays
+<span class="fc" id="L475">                Arguments.of(MembershipType.STUDENT, BookCategory.REGULAR, 125, 2),</span>
+<span class="fc" id="L476">                Arguments.of(MembershipType.STUDENT, BookCategory.NEW_RELEASE, 250, 2),</span>
+<span class="fc" id="L477">                Arguments.of(MembershipType.FACULTY, BookCategory.REGULAR, 50, 7),</span>
+<span class="fc" id="L478">                Arguments.of(MembershipType.FACULTY, BookCategory.NEW_RELEASE, 125, 7),</span>
+<span class="fc" id="L479">                Arguments.of(MembershipType.COMMUNITY, BookCategory.REGULAR, 250, 0),</span>
+<span class="fc" id="L480">                Arguments.of(MembershipType.COMMUNITY, BookCategory.NEW_RELEASE, 500, 0)</span>
+        );
+    }
+
+    private static int graceDaysFor(MembershipType membership) {
+<span class="fc bfc" id="L485" title="All 3 branches covered.">        return switch (membership) {</span>
+<span class="fc" id="L486">            case FACULTY -&gt; 7;</span>
+<span class="fc" id="L487">            case STUDENT -&gt; 2;</span>
+<span class="fc" id="L488">            case COMMUNITY -&gt; 0;</span>
+        };
+    }
+
+    static Stream&lt;Arguments&gt; rentalLimitCases() {
+<span class="fc" id="L493">        return Stream.of(</span>
+<span class="fc" id="L494">                Arguments.of(MembershipType.STUDENT, 5),</span>
+<span class="fc" id="L495">                Arguments.of(MembershipType.FACULTY, 10),</span>
+<span class="fc" id="L496">                Arguments.of(MembershipType.COMMUNITY, 2)</span>
+        );
+    }
+
+    static Stream&lt;Arguments&gt; justBelowRentalLimitCases() {
+<span class="fc" id="L501">        return Stream.of(</span>
+<span class="fc" id="L502">                Arguments.of(MembershipType.STUDENT, 4, 5),</span>
+<span class="fc" id="L503">                Arguments.of(MembershipType.FACULTY, 9, 10),</span>
+<span class="fc" id="L504">                Arguments.of(MembershipType.COMMUNITY, 1, 2)</span>
+        );
+    }
+
+    static Stream&lt;Arguments&gt; returnBookNotRentedByUserCases() {
+<span class="fc" id="L509">        User otherUser = new User(&quot;Bob&quot;, 2, MembershipType.FACULTY);</span>
+<span class="fc" id="L510">        return Stream.of(</span>
+<span class="fc" id="L511">                Arguments.of(&quot;unknown book&quot;, null),</span>
+<span class="fc" id="L512">                Arguments.of(&quot;book not currently rented&quot;, new Book(BOOK_TITLE, BOOK_AUTHOR, BookCategory.REGULAR)),</span>
+<span class="fc" id="L513">                Arguments.of(</span>
+                        &quot;book rented by another user&quot;,
+                        new Book(BOOK_TITLE, BOOK_AUTHOR, BookCategory.REGULAR)
+<span class="fc" id="L516">                                .rentTo(otherUser, TODAY.plusDays(7)))</span>
+        );
+    }
+
+    static Stream&lt;Arguments&gt; onTimeReturnCases() {
+<span class="fc" id="L521">        return Stream.of(</span>
+<span class="fc" id="L522">                Arguments.of(5),  // before due date</span>
+<span class="fc" id="L523">                Arguments.of(0)   // exactly on due date</span>
+        );
+    }
+
+    private User user(MembershipType membership) {
+<span class="fc" id="L528">        return new User(&quot;Alice&quot;, USER_ID, membership);</span>
+    }
+
+    private Book availableBook(BookCategory category) {
+<span class="fc" id="L532">        return new Book(BOOK_TITLE, BOOK_AUTHOR, category);</span>
+    }
+
+    private Book rentedBook(User renter, BookCategory category, LocalDate dueDate) {
+<span class="fc" id="L536">        return new Book(BOOK_TITLE, BOOK_AUTHOR, category).rentTo(renter, dueDate);</span>
+    }
+
+    private void stubEligibleUserAndBook(User user, Book book) {
+<span class="fc" id="L540">        when(userRepository.findUserById(USER_ID)).thenReturn(user);</span>
+<span class="fc" id="L541">        when(bookRepository.findBookByTitle(BOOK_TITLE)).thenReturn(book);</span>
+<span class="fc" id="L542">        when(paymentService.getOutstandingBalance(user)).thenReturn(0);</span>
+<span class="fc" id="L543">    }</span>
+
+    private void verifyNoRentalPersistence() {
+<span class="fc" id="L546">        verify(bookRepository, never()).updateBook(any());</span>
+<span class="fc" id="L547">        verify(bookRepository, never()).addBookToUser(any(), any());</span>
+<span class="fc" id="L548">    }</span>
+
+    private void verifyNoReturnPersistence() {
+<span class="fc" id="L551">        verify(bookRepository, never()).updateBook(any());</span>
+<span class="fc" id="L552">        verify(bookRepository, never()).removeBookFromUser(any(), any());</span>
+<span class="fc" id="L553">        verify(paymentService, never()).chargeLateFee(any(), anyInt());</span>
+<span class="fc" id="L554">    }</span>
+
+    private void verifySuccessfulReturn(User user, boolean expectCharge, int expectedFee) {
+<span class="fc" id="L557">        ArgumentCaptor&lt;Book&gt; bookCaptor = ArgumentCaptor.forClass(Book.class);</span>
+<span class="fc" id="L558">        verify(bookRepository).updateBook(bookCaptor.capture());</span>
+<span class="fc" id="L559">        Book returnedBook = bookCaptor.getValue();</span>
+<span class="fc" id="L560">        assertTrue(returnedBook.available());</span>
+<span class="fc" id="L561">        assertNull(returnedBook.currentUser());</span>
+<span class="fc" id="L562">        assertNull(returnedBook.dueDate());</span>
+<span class="fc" id="L563">        assertEquals(BOOK_TITLE, returnedBook.title());</span>
+<span class="fc" id="L564">        verify(bookRepository).removeBookFromUser(user, returnedBook);</span>
+<span class="fc bfc" id="L565" title="All 2 branches covered.">        if (expectCharge) {</span>
+<span class="fc" id="L566">            verify(paymentService).chargeLateFee(user, expectedFee);</span>
+        } else {
+<span class="fc" id="L568">            verify(paymentService, never()).chargeLateFee(any(), anyInt());</span>
+        }
+<span class="fc" id="L570">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.15.202606040825</span></div></body></html>
