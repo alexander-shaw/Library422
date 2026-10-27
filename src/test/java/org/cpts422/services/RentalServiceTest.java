@@ -42,6 +42,8 @@ import static org.mockito.Mockito.when;
 class RentalServiceTest {
 
     private static final LocalDate TODAY = LocalDate.of(2024, 6, 15);
+    private static final LocalDate FEE_DUE_DATE = LocalDate.of(2024, 6, 1);
+    private static final int MAX_LATE_FEE_CENTS = 2000;
     private static final int USER_ID = 1;
     private static final String BOOK_TITLE = "Clean Code";
     private static final String BOOK_AUTHOR = "Robert Martin";
@@ -337,6 +339,96 @@ class RentalServiceTest {
         verify(paymentService, never()).getOutstandingBalance(any());
     }
 
+    @ParameterizedTest(name = "{0} {1}: {2}")
+    @MethodSource("zeroLateFeeCases")
+    @DisplayName("calculateLateFee returns zero for missing due date, early, on-time, and grace boundaries")
+    void calculateLateFeeReturnsZeroWhenNotChargeable(
+            MembershipType membership,
+            BookCategory category,
+            String scenario,
+            Integer daysAfterDue) {
+        User user = user(membership);
+        Book book = daysAfterDue == null
+                ? new Book(BOOK_TITLE, BOOK_AUTHOR, category, false, user, null)
+                : rentedBook(user, category, FEE_DUE_DATE);
+        LocalDate returnDate = daysAfterDue == null
+                ? FEE_DUE_DATE.plusDays(10)
+                : FEE_DUE_DATE.plusDays(daysAfterDue);
+
+        assertEquals(0, rentalService.calculateLateFee(book, user, returnDate), scenario);
+    }
+
+    @ParameterizedTest(name = "{0} {1}: first chargeable day yields {3} cents")
+    @MethodSource("membershipCategoryRateCases")
+    @DisplayName("calculateLateFee charges the daily rate on the first chargeable day")
+    void calculateLateFeeOnFirstChargeableDayChargesDailyRate(
+            MembershipType membership,
+            BookCategory category,
+            int graceDays,
+            int dailyRateCents,
+            int chargeableDaysForExactCap) {
+        User user = user(membership);
+        Book book = rentedBook(user, category, FEE_DUE_DATE);
+        LocalDate returnDate = FEE_DUE_DATE.plusDays(graceDays + 1);
+
+        assertTrue(chargeableDaysForExactCap * dailyRateCents == MAX_LATE_FEE_CENTS);
+        assertEquals(dailyRateCents, rentalService.calculateLateFee(book, user, returnDate));
+    }
+
+    @ParameterizedTest(name = "{0} {1}: 5 chargeable days yield {2} cents")
+    @MethodSource("multipleOverdueDaysBelowCapCases")
+    @DisplayName("calculateLateFee multiplies chargeable overdue days by the daily rate below the cap")
+    void calculateLateFeeForMultipleOverdueDaysBelowCap(
+            MembershipType membership,
+            BookCategory category,
+            int expectedFeeCents,
+            int graceDays) {
+        User user = user(membership);
+        Book book = rentedBook(user, category, FEE_DUE_DATE);
+        LocalDate returnDate = FEE_DUE_DATE.plusDays(graceDays + 5);
+
+        assertEquals(expectedFeeCents, rentalService.calculateLateFee(book, user, returnDate));
+    }
+
+    @ParameterizedTest(name = "{0} {1}: {4} chargeable days yield exactly {5} cents")
+    @MethodSource("membershipCategoryRateCases")
+    @DisplayName("calculateLateFee returns exactly the maximum when the uncapped fee equals the cap")
+    void calculateLateFeeExactlyAtCapReturnsMaximum(
+            MembershipType membership,
+            BookCategory category,
+            int graceDays,
+            int dailyRateCents,
+            int chargeableDaysForExactCap) {
+        User user = user(membership);
+        Book book = rentedBook(user, category, FEE_DUE_DATE);
+        LocalDate returnDate = FEE_DUE_DATE.plusDays(graceDays + chargeableDaysForExactCap);
+
+        assertEquals(MAX_LATE_FEE_CENTS, chargeableDaysForExactCap * dailyRateCents);
+        assertEquals(
+                MAX_LATE_FEE_CENTS,
+                rentalService.calculateLateFee(book, user, returnDate));
+    }
+
+    @ParameterizedTest(name = "{0} {1}: exceeding cap is limited to {5} cents")
+    @MethodSource("membershipCategoryRateCases")
+    @DisplayName("calculateLateFee limits fees that exceed the maximum to 2000 cents")
+    void calculateLateFeeExceedingCapIsLimitedToMaximum(
+            MembershipType membership,
+            BookCategory category,
+            int graceDays,
+            int dailyRateCents,
+            int chargeableDaysForExactCap) {
+        User user = user(membership);
+        Book book = rentedBook(user, category, FEE_DUE_DATE);
+        int chargeableDays = chargeableDaysForExactCap + 1;
+        LocalDate returnDate = FEE_DUE_DATE.plusDays(graceDays + chargeableDays);
+
+        assertTrue(chargeableDays * dailyRateCents > MAX_LATE_FEE_CENTS);
+        assertEquals(
+                MAX_LATE_FEE_CENTS,
+                rentalService.calculateLateFee(book, user, returnDate));
+    }
+
     static Stream<Arguments> successfulRentBookCases() {
         return Stream.of(
                 Arguments.of(MembershipType.STUDENT, BookCategory.REGULAR, 21),
@@ -346,6 +438,55 @@ class RentalServiceTest {
                 Arguments.of(MembershipType.COMMUNITY, BookCategory.REGULAR, 21),
                 Arguments.of(MembershipType.COMMUNITY, BookCategory.NEW_RELEASE, 7)
         );
+    }
+
+    static Stream<Arguments> zeroLateFeeCases() {
+        Stream.Builder<Arguments> cases = Stream.builder();
+        for (MembershipType membership : MembershipType.values()) {
+            int graceDays = graceDaysFor(membership);
+            for (BookCategory category : new BookCategory[]{BookCategory.REGULAR, BookCategory.NEW_RELEASE}) {
+                cases.add(Arguments.of(membership, category, "missing due date", null));
+                cases.add(Arguments.of(membership, category, "early return", -3));
+                cases.add(Arguments.of(membership, category, "on-time return", 0));
+                if (graceDays > 0) {
+                    cases.add(Arguments.of(membership, category, "first grace day", 1));
+                    cases.add(Arguments.of(membership, category, "last grace day boundary", graceDays));
+                }
+            }
+        }
+        return cases.build();
+    }
+
+    static Stream<Arguments> membershipCategoryRateCases() {
+        return Stream.of(
+                // membership, category, graceDays, dailyRateCents, chargeableDaysForExactCap (rate * days = 2000)
+                Arguments.of(MembershipType.STUDENT, BookCategory.REGULAR, 2, 25, 80),
+                Arguments.of(MembershipType.STUDENT, BookCategory.NEW_RELEASE, 2, 50, 40),
+                Arguments.of(MembershipType.FACULTY, BookCategory.REGULAR, 7, 10, 200),
+                Arguments.of(MembershipType.FACULTY, BookCategory.NEW_RELEASE, 7, 25, 80),
+                Arguments.of(MembershipType.COMMUNITY, BookCategory.REGULAR, 0, 50, 40),
+                Arguments.of(MembershipType.COMMUNITY, BookCategory.NEW_RELEASE, 0, 100, 20)
+        );
+    }
+
+    static Stream<Arguments> multipleOverdueDaysBelowCapCases() {
+        return Stream.of(
+                // membership, category, expectedFee for 5 chargeable days, graceDays
+                Arguments.of(MembershipType.STUDENT, BookCategory.REGULAR, 125, 2),
+                Arguments.of(MembershipType.STUDENT, BookCategory.NEW_RELEASE, 250, 2),
+                Arguments.of(MembershipType.FACULTY, BookCategory.REGULAR, 50, 7),
+                Arguments.of(MembershipType.FACULTY, BookCategory.NEW_RELEASE, 125, 7),
+                Arguments.of(MembershipType.COMMUNITY, BookCategory.REGULAR, 250, 0),
+                Arguments.of(MembershipType.COMMUNITY, BookCategory.NEW_RELEASE, 500, 0)
+        );
+    }
+
+    private static int graceDaysFor(MembershipType membership) {
+        return switch (membership) {
+            case FACULTY -> 7;
+            case STUDENT -> 2;
+            case COMMUNITY -> 0;
+        };
     }
 
     static Stream<Arguments> rentalLimitCases() {
