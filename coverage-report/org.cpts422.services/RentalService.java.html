@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RentalService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">All tests - JaCoCo Coverage Results</a> &gt; <a href="index.source.html" class="el_package">org.cpts422.services</a> &gt; <span class="el_source">RentalService.java</span></div><h1>RentalService.java</h1><pre class="source lang-java linenums">package org.cpts422.services;
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RentalService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">LibraryApplication</a> &gt; <a href="index.source.html" class="el_package">org.cpts422.services</a> &gt; <span class="el_source">RentalService.java</span></div><h1>RentalService.java</h1><pre class="source lang-java linenums">package org.cpts422.services;
 
 import org.cpts422.exceptions.BookNotFoundException;
 import org.cpts422.exceptions.RentalNotAllowedException;
@@ -118,45 +118,40 @@ public class RentalService {
         }
 
 <span class="fc" id="L120">        long daysLate = ChronoUnit.DAYS.between(book.dueDate(), returnDate);</span>
+<span class="fc" id="L121">        long chargeableDays = daysLate - getGraceDays(user.membership());</span>
+<span class="fc bfc" id="L122" title="All 2 branches covered.">        if (chargeableDays &lt;= 0) {</span>
+<span class="fc" id="L123">            return 0;</span>
+        }
 
-        int dailyRateCents;
-<span class="fc bfc" id="L123" title="All 2 branches covered.">        if (book.category() == BookCategory.NEW_RELEASE) {</span>
-<span class="fc bfc" id="L124" title="All 2 branches covered.">            if (user.membership() == MembershipType.FACULTY) {</span>
-<span class="fc" id="L125">                dailyRateCents = 25;</span>
-<span class="fc bfc" id="L126" title="All 2 branches covered.">            } else if (user.membership() == MembershipType.STUDENT) {</span>
-<span class="fc" id="L127">                dailyRateCents = 50;</span>
-            } else {
-<span class="fc" id="L129">                dailyRateCents = 100;</span>
+<span class="fc" id="L126">        int dailyRateCents = getDailyLateFeeCents(book.category(), user.membership());</span>
+<span class="fc" id="L127">        long fee = chargeableDays * dailyRateCents;</span>
+<span class="fc bfc" id="L128" title="All 2 branches covered.">        if (fee &gt; MAX_LATE_FEE_CENTS) {</span>
+<span class="fc" id="L129">            fee = MAX_LATE_FEE_CENTS;</span>
+        }
+<span class="fc" id="L131">        return (int) fee;</span>
+    }
+
+    private int getDailyLateFeeCents(BookCategory category, MembershipType membership) {
+<span class="fc bfc" id="L135" title="All 2 branches covered.">        if (category == BookCategory.NEW_RELEASE) {</span>
+<span class="fc bfc" id="L136" title="All 2 branches covered.">            if (membership == MembershipType.FACULTY) {</span>
+<span class="fc" id="L137">                return 25;</span>
             }
-        } else {
-<span class="fc bfc" id="L132" title="All 2 branches covered.">            if (user.membership() == MembershipType.FACULTY) {</span>
-<span class="fc" id="L133">                dailyRateCents = 10;</span>
-<span class="fc bfc" id="L134" title="All 2 branches covered.">            } else if (user.membership() == MembershipType.STUDENT) {</span>
-<span class="fc" id="L135">                dailyRateCents = 25;</span>
-            } else {
-<span class="fc" id="L137">                dailyRateCents = 50;</span>
-            }
+<span class="fc bfc" id="L139" title="All 2 branches covered.">            return membership == MembershipType.STUDENT ? 50 : 100;</span>
         }
+<span class="fc bfc" id="L141" title="All 2 branches covered.">        if (membership == MembershipType.FACULTY) {</span>
+<span class="fc" id="L142">            return 10;</span>
+        }
+<span class="fc bfc" id="L144" title="All 2 branches covered.">        return membership == MembershipType.STUDENT ? 25 : 50;</span>
+    }
 
-        int graceDays;
-<span class="fc bfc" id="L142" title="All 2 branches covered.">        if (user.membership() == MembershipType.FACULTY) {</span>
-<span class="fc" id="L143">            graceDays = 7;</span>
-<span class="fc bfc" id="L144" title="All 2 branches covered.">        } else if (user.membership() == MembershipType.STUDENT) {</span>
-<span class="fc" id="L145">            graceDays = 2;</span>
-        } else {
-<span class="fc" id="L147">            graceDays = 0;</span>
+    private int getGraceDays(MembershipType membership) {
+<span class="fc bfc" id="L148" title="All 2 branches covered.">        if (membership == MembershipType.FACULTY) {</span>
+<span class="fc" id="L149">            return 7;</span>
         }
-
-<span class="fc" id="L150">        long chargeableDays = daysLate - graceDays;</span>
-<span class="fc bfc" id="L151" title="All 2 branches covered.">        if (chargeableDays &lt;= 0) {</span>
-<span class="fc" id="L152">            return 0;</span>
+<span class="fc bfc" id="L151" title="All 2 branches covered.">        if (membership == MembershipType.STUDENT) {</span>
+<span class="fc" id="L152">            return 2;</span>
         }
-
-<span class="fc" id="L155">        long fee = chargeableDays * dailyRateCents;</span>
-<span class="fc bfc" id="L156" title="All 2 branches covered.">        if (fee &gt; MAX_LATE_FEE_CENTS) {</span>
-<span class="fc" id="L157">            fee = MAX_LATE_FEE_CENTS;</span>
-        }
-<span class="fc" id="L159">        return (int) fee;</span>
+<span class="fc" id="L154">        return 0;</span>
     }
 }
-</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.15.202606040825</span></div></body></html>
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.14.202510111229</span></div></body></html>

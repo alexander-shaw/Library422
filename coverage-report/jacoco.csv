@@ -1,0 +1,14 @@
+GROUP,PACKAGE,CLASS,INSTRUCTION_MISSED,INSTRUCTION_COVERED,BRANCH_MISSED,BRANCH_COVERED,LINE_MISSED,LINE_COVERED,COMPLEXITY_MISSED,COMPLEXITY_COVERED,METHOD_MISSED,METHOD_COVERED
+LibraryApplication,org.cpts422,Main,98,0,0,0,21,0,2,0,2,0
+LibraryApplication,org.cpts422.repositories,InMemoryBookRepository,85,0,6,0,16,0,10,0,7,0
+LibraryApplication,org.cpts422.repositories,InMemoryUserRepository,24,0,0,0,5,0,3,0,3,0
+LibraryApplication,org.cpts422.exceptions,RentalNotAllowedException,0,4,0,0,0,2,0,1,0,1
+LibraryApplication,org.cpts422.exceptions,BookNotFoundException,0,4,0,0,0,2,0,1,0,1
+LibraryApplication,org.cpts422.exceptions,UserNotFoundException,0,4,0,0,0,2,0,1,0,1
+LibraryApplication,org.cpts422.models,BookCategory,0,21,0,0,0,4,0,1,0,1
+LibraryApplication,org.cpts422.models,Book,15,68,5,5,3,9,5,4,0,4
+LibraryApplication,org.cpts422.models,MembershipType,0,21,0,0,0,4,0,1,0,1
+LibraryApplication,org.cpts422.models,User,15,21,4,4,3,5,4,1,0,1
+LibraryApplication,org.cpts422.services,SystemDateProvider,5,0,0,0,2,0,2,0,2,0
+LibraryApplication,org.cpts422.services,InMemoryPaymentService,0,30,0,0,0,5,0,3,0,3
+LibraryApplication,org.cpts422.services,RentalService,0,305,0,50,0,73,0,31,0,6

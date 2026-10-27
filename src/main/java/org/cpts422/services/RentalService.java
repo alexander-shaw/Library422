@@ -118,44 +118,39 @@ public class RentalService {
         }
 
         long daysLate = ChronoUnit.DAYS.between(book.dueDate(), returnDate);
-
-        int dailyRateCents;
-        if (book.category() == BookCategory.NEW_RELEASE) {
-            if (user.membership() == MembershipType.FACULTY) {
-                dailyRateCents = 25;
-            } else if (user.membership() == MembershipType.STUDENT) {
-                dailyRateCents = 50;
-            } else {
-                dailyRateCents = 100;
-            }
-        } else {
-            if (user.membership() == MembershipType.FACULTY) {
-                dailyRateCents = 10;
-            } else if (user.membership() == MembershipType.STUDENT) {
-                dailyRateCents = 25;
-            } else {
-                dailyRateCents = 50;
-            }
-        }
-
-        int graceDays;
-        if (user.membership() == MembershipType.FACULTY) {
-            graceDays = 7;
-        } else if (user.membership() == MembershipType.STUDENT) {
-            graceDays = 2;
-        } else {
-            graceDays = 0;
-        }
-
-        long chargeableDays = daysLate - graceDays;
+        long chargeableDays = daysLate - getGraceDays(user.membership());
         if (chargeableDays <= 0) {
             return 0;
         }
 
+        int dailyRateCents = getDailyLateFeeCents(book.category(), user.membership());
         long fee = chargeableDays * dailyRateCents;
         if (fee > MAX_LATE_FEE_CENTS) {
             fee = MAX_LATE_FEE_CENTS;
         }
         return (int) fee;
+    }
+
+    private int getDailyLateFeeCents(BookCategory category, MembershipType membership) {
+        if (category == BookCategory.NEW_RELEASE) {
+            if (membership == MembershipType.FACULTY) {
+                return 25;
+            }
+            return membership == MembershipType.STUDENT ? 50 : 100;
+        }
+        if (membership == MembershipType.FACULTY) {
+            return 10;
+        }
+        return membership == MembershipType.STUDENT ? 25 : 50;
+    }
+
+    private int getGraceDays(MembershipType membership) {
+        if (membership == MembershipType.FACULTY) {
+            return 7;
+        }
+        if (membership == MembershipType.STUDENT) {
+            return 2;
+        }
+        return 0;
     }
 }
